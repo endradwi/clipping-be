@@ -1,6 +1,6 @@
-# 🎬 Cheat-Clip API (`clipping-be`)
+# 🎬 Clipping API (`clipping-be`)
 
-Ultra-lean, high-efficiency AI auto-clipper backend engine built with **Bun** & **Elysia**.
+Ultra-lean, high-efficiency AI auto-clipper backend engine for **Clipping** built with **Bun** & **Elysia**.
 
 ## Features
 - **Zero-Disk Slicing:** FFmpeg direct stream slicing without saving whole videos.
