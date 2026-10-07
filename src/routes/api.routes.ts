@@ -14,4 +14,8 @@ export const apiRoutes = new Elysia({ prefix: '/api/v1' })
 
   // BYOK Settings
   .get('/settings', () => settingsController.getSettingsStatus())
-  .post('/settings', ({ body, set }) => settingsController.saveSettings({ body, set }));
+  .post('/settings', ({ body, set }) => settingsController.saveSettings({ body, set }))
+
+  // YouTube Cookies (Anti-Bot Bypass)
+  .get('/cookies', () => settingsController.getCookiesStatus())
+  .post('/cookies', ({ body }) => settingsController.saveCookies({ body }));

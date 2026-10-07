@@ -1,5 +1,8 @@
 import { SaveSettingsSchema } from '../models/settings.model';
 import { successResponse, errorResponse } from '../views/response.view';
+import { join } from 'node:path';
+
+const cookiesFilePath = join(process.cwd(), 'cookies.txt');
 
 export class SettingsController {
   public saveSettings({ body, set }: { body: any; set: any }) {
@@ -26,6 +29,20 @@ export class SettingsController {
       defaultModel: process.env.AI_MODEL_CHAT || 'gemini/gemini-3.7-flash',
       hasGroqFallback: !!process.env.GROQ_API_KEY
     });
+  }
+
+  public async saveCookies({ body }: { body: any }) {
+    const { cookies } = body || {};
+    if (!cookies || typeof cookies !== 'string') {
+      return errorResponse('Valid cookies string required', 'BAD_REQUEST', 400);
+    }
+    await Bun.write(cookiesFilePath, cookies.trim());
+    return successResponse({ message: 'YouTube cookies.txt saved successfully' });
+  }
+
+  public async getCookiesStatus() {
+    const exists = await Bun.file(cookiesFilePath).exists();
+    return successResponse({ hasCookies: exists });
   }
 }
 
