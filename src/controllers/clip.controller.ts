@@ -127,6 +127,40 @@ export class ClipController {
     return successResponse(job);
   }
 
+  // Stream-download endpoint (bypasses ISP blocks on *.r2.dev domains)
+  public async downloadClip({ params, set }: { params: { id: string }; set: any }) {
+    let job = await dbService.getJob(params.id);
+    let r2Url = job?.r2Url;
+
+    if (!r2Url) {
+      const publicDomain = (process.env.R2_PUBLIC_DOMAIN || 'https://pub-054cc5f9c9824a97a630013aee308d7e.r2.dev').replace(/\/$/, '');
+      r2Url = `${publicDomain}/clips/${params.id}.mp4`;
+    }
+
+    try {
+      const response = await fetch(r2Url);
+      if (!response.ok || !response.body) {
+        set.status = response.status;
+        return 'Clip not found in storage';
+      }
+
+      const safeTitle = (job?.title || 'clip').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40);
+      const filename = `clipping_${safeTitle}_${params.id.slice(0, 8)}.mp4`;
+
+      return new Response(response.body, {
+        headers: {
+          'Content-Type': 'video/mp4',
+          'Content-Disposition': `attachment; filename="${filename}"`,
+          ...(response.headers.get('content-length') ? { 'Content-Length': response.headers.get('content-length')! } : {}),
+          'Accept-Ranges': 'bytes'
+        }
+      });
+    } catch (err: any) {
+      set.status = 500;
+      return `Download error: ${err.message}`;
+    }
+  }
+
   // Server-Sent Events (SSE) endpoint for real-time progress
   public streamProgress({ params }: { params: { id: string } }) {
     const { id } = params;

@@ -11,6 +11,7 @@ export const apiRoutes = new Elysia({ prefix: '/api/v1' })
   .post('/clips/render', ({ body }) => clipController.triggerRender({ body }))
   .get('/clips/:id', ({ params }) => clipController.getJob({ params }))
   .get('/clips/:id/progress', ({ params }) => clipController.streamProgress({ params }))
+  .get('/clips/:id/download', ({ params, set }) => clipController.downloadClip({ params, set }))
 
   // BYOK Settings
   .get('/settings', () => settingsController.getSettingsStatus())
