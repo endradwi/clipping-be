@@ -17,8 +17,8 @@ export class HeatmapController {
       // 1. Fetch metadata, heatmap curves, and spoken transcript
       const meta = await ytdlpService.extractMetadata(url);
 
-      // 2. Compute Top 3 retention peaks using mathematical RPI (Anti-Slop)
-      const topClips = heatmapService.computeTopClips(meta.heatmap, meta.duration, 30, 3);
+      // 2. Compute up to 12 candidate clips (4 batches of 3 clips) sorted by RPI
+      const topClips = heatmapService.computeTopClips(meta.heatmap, meta.duration, 30, 12);
 
       const result: VideoAnalysisResult = {
         videoId: meta.id,

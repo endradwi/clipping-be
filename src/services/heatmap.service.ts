@@ -1,16 +1,14 @@
 import { RawHeatmapPoint, CandidateClip } from '../models/heatmap.model';
 
 export class HeatmapService {
-  // Pure mathematical retention peak calculation (RPI) - Zero AI Slop
+  // Pure mathematical retention peak calculation (RPI) - supports multi-batch extraction (up to 12 clips / 4 batches)
   public computeTopClips(
     heatmap: RawHeatmapPoint[],
     totalDuration: number,
     clipDuration: number = 30,
-    maxClips: number = 3
+    maxClips: number = 12
   ): CandidateClip[] {
     if (!heatmap || heatmap.length === 0) {
-      // Fallback if video has no heatmap (e.g., brand new video with < 100 views)
-      // Pick 3 evenly spaced intervals
       return this.generateFallbackIntervals(totalDuration, clipDuration, maxClips);
     }
 
@@ -25,15 +23,14 @@ export class HeatmapService {
       rpi: ((p.value - minVal) / range) * 100
     }));
 
-    // 2. Find local maxima peaks (points with higher value than neighbors)
+    // 2. Find local maxima peaks
     const peaks: Array<{ time: number; score: number }> = [];
     for (let i = 0; i < normalized.length; i++) {
       const prev = normalized[i - 1]?.rpi ?? 0;
       const curr = normalized[i].rpi;
       const next = normalized[i + 1]?.rpi ?? 0;
 
-      if (curr >= prev && curr >= next && curr > 25) {
-        // Center the clip around the peak
+      if (curr >= prev && curr >= next && curr > 15) {
         peaks.push({
           time: normalized[i].start_time,
           score: Math.round(curr)
@@ -44,23 +41,22 @@ export class HeatmapService {
     // Sort peaks by score descending
     peaks.sort((a, b) => b.score - a.score);
 
-    // 3. Select Top 3 non-overlapping candidate clips
+    // 3. Select non-overlapping candidate clips (spaced by clipDuration + 3s)
     const chosenClips: CandidateClip[] = [];
-    const minSpacing = clipDuration + 5; // ensure at least 35s gap between clips
+    const minSpacing = clipDuration + 3;
 
     for (const peak of peaks) {
       if (chosenClips.length >= maxClips) break;
 
-      // Start 5 seconds before peak for hook context
       let start = Math.max(0, peak.time - 5);
       let end = start + clipDuration;
 
       if (end > totalDuration && totalDuration > clipDuration) {
         end = totalDuration;
-        start = end - clipDuration;
+        start = Math.max(0, end - clipDuration);
       }
 
-      // Check overlap with already chosen clips
+      // Check overlap
       const overlaps = chosenClips.some(
         c => Math.abs(c.start - start) < minSpacing
       );
@@ -78,7 +74,7 @@ export class HeatmapService {
       }
     }
 
-    // If less than maxClips found, fill remainder
+    // If fewer clips than maxClips, supplement with evenly spaced fallbacks
     if (chosenClips.length < maxClips) {
       const fallbacks = this.generateFallbackIntervals(totalDuration, clipDuration, maxClips);
       for (const fb of fallbacks) {
@@ -98,7 +94,7 @@ export class HeatmapService {
     const step = Math.max(clipDuration, Math.floor((totalDuration - clipDuration) / (count + 1)));
 
     for (let i = 1; i <= count; i++) {
-      const start = Math.min(totalDuration - clipDuration, Math.max(0, i * step));
+      const start = Math.min(totalDuration - clipDuration, Math.max(0, (i - 1) * step));
       const end = start + clipDuration;
       clips.push({
         id: crypto.randomUUID(),
@@ -106,7 +102,7 @@ export class HeatmapService {
         start: Math.round(start),
         end: Math.round(end),
         duration: Math.round(end - start),
-        score: Math.round(85 - (i * 5)),
+        score: Math.max(10, Math.round(90 - (i * 6))),
         label: `Key Highlight #${i}`
       });
     }
