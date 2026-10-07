@@ -22,6 +22,12 @@ export interface CandidateClip {
   label: string;
 }
 
+export interface TranscriptLine {
+  start: number;
+  duration: number;
+  text: string;
+}
+
 export interface VideoAnalysisResult {
   videoId: string;
   title: string;
@@ -30,4 +36,5 @@ export interface VideoAnalysisResult {
   thumbnail: string;
   heatmapPoints: RawHeatmapPoint[];
   topClips: CandidateClip[];
+  transcript: TranscriptLine[];
 }

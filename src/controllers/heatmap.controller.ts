@@ -14,7 +14,7 @@ export class HeatmapController {
     const { url } = parse.data;
 
     try {
-      // 1. Fetch metadata & heatmap curve via yt-dlp
+      // 1. Fetch metadata, heatmap curves, and spoken transcript
       const meta = await ytdlpService.extractMetadata(url);
 
       // 2. Compute Top 3 retention peaks using mathematical RPI (Anti-Slop)
@@ -27,7 +27,8 @@ export class HeatmapController {
         channel: meta.channel,
         thumbnail: meta.thumbnail,
         heatmapPoints: meta.heatmap,
-        topClips
+        topClips,
+        transcript: meta.transcript || []
       };
 
       return successResponse(result);

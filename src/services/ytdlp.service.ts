@@ -1,6 +1,7 @@
 import { logger } from '../common/logger';
 import { AppError } from '../common/errors';
 import { join } from 'node:path';
+import type { TranscriptLine } from '../models/heatmap.model';
 
 export interface YtDlpMetadata {
   id: string;
@@ -9,6 +10,7 @@ export interface YtDlpMetadata {
   channel: string;
   thumbnail: string;
   heatmap: Array<{ start_time: number; end_time: number; value: number }>;
+  transcript: TranscriptLine[];
 }
 
 export class YtDlpService {
@@ -27,7 +29,7 @@ export class YtDlpService {
     return [];
   }
 
-  // Extract metadata and heatmap curves without downloading the video
+  // Extract metadata, heatmap curves, and full spoken transcript
   public async extractMetadata(url: string): Promise<YtDlpMetadata> {
     logger.info(`Fetching metadata & heatmap for: ${url}`);
     const cookiesArg = await this.getCookiesArg();
@@ -64,17 +66,65 @@ export class YtDlpService {
 
     try {
       const data = JSON.parse(stdoutText);
+      const transcript = await this.extractTranscriptFromData(data);
+
       return {
         id: data.id,
         title: data.title || 'Untitled YouTube Video',
         duration: Number(data.duration) || 0,
         channel: data.uploader || data.channel || 'Unknown Channel',
         thumbnail: data.thumbnail || `https://i.ytimg.com/vi/${data.id}/hqdefault.jpg`,
-        heatmap: Array.isArray(data.heatmap) ? data.heatmap : []
+        heatmap: Array.isArray(data.heatmap) ? data.heatmap : [],
+        transcript
       };
     } catch (e: any) {
       throw new AppError(`Invalid JSON from yt-dlp: ${e.message}`, 500);
     }
+  }
+
+  private async extractTranscriptFromData(data: any): Promise<TranscriptLine[]> {
+    const caps = data.subtitles || data.automatic_captions || {};
+    const candidateLangs = ['id', 'en', ...Object.keys(caps)];
+    const lines: TranscriptLine[] = [];
+
+    for (const lang of candidateLangs) {
+      const tracks = caps[lang];
+      if (!Array.isArray(tracks)) continue;
+
+      const json3Track = tracks.find((t: any) => t.ext === 'json3');
+      if (json3Track && json3Track.url) {
+        try {
+          const res = await fetch(json3Track.url, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+          });
+          if (!res.ok) continue;
+
+          const timedtext: any = await res.json();
+          const events = timedtext.events || [];
+
+          for (const ev of events) {
+            const segs = ev.segs || [];
+            const text = segs.map((s: any) => s.utf8 || '').join('').trim();
+            if (text && text !== '\n') {
+              lines.push({
+                start: Math.round((ev.tStartMs || 0) / 100) / 10,
+                duration: Math.round((ev.dDurationMs || 0) / 100) / 10,
+                text
+              });
+            }
+          }
+
+          if (lines.length > 0) {
+            logger.info(`Extracted ${lines.length} transcript lines from language track '${lang}'`);
+            return lines;
+          }
+        } catch (err: any) {
+          logger.debug(`Could not parse caption track ${lang}: ${err.message}`);
+        }
+      }
+    }
+
+    return [];
   }
 
   // Get direct stream URL for audio/video slicing
