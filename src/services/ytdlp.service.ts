@@ -13,6 +13,11 @@ export interface YtDlpMetadata {
   transcript: TranscriptLine[];
 }
 
+export interface StreamUrls {
+  videoUrl: string;
+  audioUrl?: string;
+}
+
 export class YtDlpService {
   private ytDlpPath: string;
   private cookiesPath: string;
@@ -38,6 +43,7 @@ export class YtDlpService {
       this.ytDlpPath,
       '--skip-download',
       '--dump-json',
+      '--remote-components', 'ejs:github',
       '--no-warnings',
       '--socket-timeout', '15',
       ...cookiesArg,
@@ -127,13 +133,13 @@ export class YtDlpService {
     return [];
   }
 
-  // Get direct stream URL for audio/video slicing
-  public async getDirectStreamUrl(url: string): Promise<string> {
+  // Get direct stream URLs for audio and video slicing
+  public async getDirectStreamUrls(url: string): Promise<StreamUrls> {
     const cookiesArg = await this.getCookiesArg();
     const proc = Bun.spawn([
       this.ytDlpPath,
+      '--remote-components', 'ejs:github',
       '-g',
-      '-f', 'best[ext=mp4]/best',
       '--no-warnings',
       ...cookiesArg,
       url
@@ -143,38 +149,23 @@ export class YtDlpService {
     });
 
     const streamOut = await new Response(proc.stdout).text();
+    const stderrOut = await new Response(proc.stderr).text();
     const exitCode = await proc.exited;
 
     if (exitCode !== 0 || !streamOut.trim()) {
-      throw new AppError('Could not resolve direct YouTube stream URL for slicing', 500);
+      logger.error(`Failed to resolve stream: ${stderrOut}`);
+      throw new AppError(`Could not resolve YouTube stream URL: ${stderrOut.slice(0, 150)}`, 500);
     }
 
-    return streamOut.trim().split('\n')[0];
-  }
-
-  // Extract native auto-subtitles if available (0 CPU, 0 cost)
-  public async extractNativeSubtitles(url: string, outVttPath: string): Promise<boolean> {
-    try {
-      const cookiesArg = await this.getCookiesArg();
-      const proc = Bun.spawn([
-        this.ytDlpPath,
-        '--skip-download',
-        '--write-auto-sub',
-        '--sub-lang', 'en,id',
-        '--sub-format', 'vtt',
-        '-o', outVttPath.replace(/\.vtt$/, ''),
-        '--no-warnings',
-        ...cookiesArg,
-        url
-      ], {
-        stdout: 'pipe',
-        stderr: 'pipe'
-      });
-      await proc.exited;
-      return await Bun.file(outVttPath).exists();
-    } catch {
-      return false;
+    const lines = streamOut.trim().split('\n').map(l => l.trim()).filter(l => l.startsWith('http'));
+    if (lines.length === 0) {
+      throw new AppError('Empty stream URL list returned by extractor', 500);
     }
+
+    return {
+      videoUrl: lines[0],
+      audioUrl: lines[1] || undefined
+    };
   }
 }
 

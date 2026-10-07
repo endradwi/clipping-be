@@ -5,7 +5,8 @@ import { join } from 'node:path';
 
 export interface SliceOptions {
   jobId: string;
-  streamUrl: string;
+  videoUrl: string;
+  audioUrl?: string;
   start: number;
   end: number;
   aspectRatio?: '9:16' | '1:1' | '16:9';
@@ -23,7 +24,7 @@ export class FFmpegService {
   // Zero-Disk Stream Slicing & Vertical 9:16 Cropping
   // Ephemeral RAII pattern: cleans up temp dir on exit
   public async sliceStream(options: SliceOptions): Promise<{ outputPath: string; cleanup: () => Promise<void> }> {
-    const { jobId, streamUrl, start, end, aspectRatio = '9:16', subtitlePath } = options;
+    const { jobId, videoUrl, audioUrl, start, end, aspectRatio = '9:16', subtitlePath } = options;
     const duration = Math.max(1, end - start);
     const tempDir = join('/tmp', 'cheat-clip', jobId);
 
@@ -42,7 +43,6 @@ export class FFmpegService {
     }
 
     if (subtitlePath && (await Bun.file(subtitlePath).exists())) {
-      // Escape path for ffmpeg subtitles filter
       const escapedSub = subtitlePath.replace(/\\/g, '/').replace(/:/g, '\\:');
       videoFilter += `,subtitles='${escapedSub}':force_style='FontSize=16,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=3'`;
     }
@@ -54,7 +54,20 @@ export class FFmpegService {
       '-loglevel', 'warning',
       '-ss', String(start),
       '-to', String(end),
-      '-i', streamUrl,
+      '-i', videoUrl
+    ];
+
+    if (audioUrl) {
+      ffmpegArgs.push(
+        '-ss', String(start),
+        '-to', String(end),
+        '-i', audioUrl,
+        '-map', '0:v:0',
+        '-map', '1:a:0'
+      );
+    }
+
+    ffmpegArgs.push(
       '-vf', videoFilter,
       '-c:v', 'libx264',
       '-preset', 'ultrafast',
@@ -64,7 +77,7 @@ export class FFmpegService {
       '-avoid_negative_ts', 'make_zero',
       '-movflags', '+faststart',
       outputPath
-    ];
+    );
 
     const proc = Bun.spawn(ffmpegArgs, {
       stdout: 'pipe',
@@ -76,7 +89,6 @@ export class FFmpegService {
 
     if (exitCode !== 0 || !(await Bun.file(outputPath).exists())) {
       logger.error(`FFmpeg execution failed (code ${exitCode}): ${stderrText}`);
-      // Clean up on failure
       await rm(tempDir, { recursive: true, force: true });
       throw new AppError(`FFmpeg slice failed: ${stderrText.slice(0, 200)}`, 500);
     }

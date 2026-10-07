@@ -56,15 +56,15 @@ export class ClipController {
     // Fire & Forget background pipeline execution
     (async () => {
       try {
-        // Step 1: Resolve stream URL
+        // Step 1: Resolve stream URLs (video + audio)
         jobEntity.status = 'downloading';
         jobEntity.progressPercent = 20;
         await dbService.saveJob(jobEntity);
         emitProgress(jobId, { status: 'downloading', progressPercent: 20 });
 
-        const streamUrl = await ytdlpService.getDirectStreamUrl(input.url);
+        const { videoUrl, audioUrl } = await ytdlpService.getDirectStreamUrls(input.url);
 
-        // Step 2: Stream slicing & 9:16 crop via FFmpeg
+        // Step 2: Stream slicing & vertical cropping via FFmpeg
         jobEntity.status = 'slicing';
         jobEntity.progressPercent = 50;
         await dbService.saveJob(jobEntity);
@@ -72,7 +72,8 @@ export class ClipController {
 
         const { outputPath, cleanup } = await ffmpegService.sliceStream({
           jobId,
-          streamUrl,
+          videoUrl,
+          audioUrl,
           start: input.start,
           end: input.end,
           aspectRatio: input.aspectRatio
@@ -154,7 +155,6 @@ export class ClipController {
             send(data);
             if (data.status === 'completed' || data.status === 'failed') {
               controller.close();
-              // Unregister
               const curr = progressSubscribers.get(id) || [];
               progressSubscribers.set(id, curr.filter(cb => cb !== callback));
             }
