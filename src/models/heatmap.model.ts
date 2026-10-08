@@ -20,6 +20,7 @@ export interface CandidateClip {
   duration: number;
   score: number; // RPI (0 - 100)
   label: string;
+  category?: 'EDU' | 'CTRL' | 'INSP';
 }
 
 export interface TranscriptLine {

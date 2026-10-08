@@ -62,6 +62,9 @@ export class HeatmapService {
       );
 
       if (!overlaps) {
+        const categories: Array<'EDU' | 'CTRL' | 'INSP'> = ['EDU', 'CTRL', 'INSP'];
+        const category = categories[chosenClips.length % 3];
+
         chosenClips.push({
           id: crypto.randomUUID(),
           rank: chosenClips.length + 1,
@@ -69,6 +72,7 @@ export class HeatmapService {
           end: Math.round(end),
           duration: Math.round(end - start),
           score: peak.score,
+          category,
           label: `Peak Retention Hotspot #${chosenClips.length + 1} (${peak.score}% interest)`
         });
       }
@@ -93,6 +97,7 @@ export class HeatmapService {
     const clips: CandidateClip[] = [];
     const step = Math.max(clipDuration, Math.floor((totalDuration - clipDuration) / (count + 1)));
 
+    const categories: Array<'EDU' | 'CTRL' | 'INSP'> = ['EDU', 'CTRL', 'INSP'];
     for (let i = 1; i <= count; i++) {
       const start = Math.min(totalDuration - clipDuration, Math.max(0, (i - 1) * step));
       const end = start + clipDuration;
@@ -103,6 +108,7 @@ export class HeatmapService {
         end: Math.round(end),
         duration: Math.round(end - start),
         score: Math.max(10, Math.round(90 - (i * 6))),
+        category: categories[(i - 1) % 3],
         label: `Key Highlight #${i}`
       });
     }
