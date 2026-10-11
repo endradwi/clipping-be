@@ -8,7 +8,9 @@ export const CreateClipSchema = z.object({
   layout: z.enum(['single', 'split', 'fit-blur']).default('single'),
   panOffset: z.number().min(0).max(1).default(0.5),
   burnSubtitles: z.boolean().default(true),
-  title: z.string().optional()
+  title: z.string().optional(),
+  hookTitle: z.string().optional(),
+  hookTitleTheme: z.enum(['yellow', 'red', 'neon', 'dark']).default('yellow').optional()
 }).refine(data => data.end > data.start, {
   message: 'End time must be greater than start time',
   path: ['end']

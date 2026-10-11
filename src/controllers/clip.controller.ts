@@ -107,7 +107,9 @@ export class ClipController {
           end: input.end,
           aspectRatio: input.aspectRatio,
           layout: input.layout,
-          panOffset: input.panOffset
+          panOffset: input.panOffset,
+          hookTitle: input.hookTitle || input.title,
+          hookTitleTheme: input.hookTitleTheme
         });
 
         try {

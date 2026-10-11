@@ -13,6 +13,8 @@ export interface SliceOptions {
   layout?: 'single' | 'split' | 'fit-blur';
   panOffset?: number; // 0.0 (left/host) to 1.0 (right/guest), 0.5 = center
   subtitlePath?: string | null;
+  hookTitle?: string;
+  hookTitleTheme?: 'yellow' | 'red' | 'neon' | 'dark';
   onProgress?: (percent: number) => void;
 }
 
@@ -35,7 +37,9 @@ export class FFmpegService {
       aspectRatio = '9:16',
       layout = 'single',
       panOffset = 0.5,
-      subtitlePath
+      subtitlePath,
+      hookTitle,
+      hookTitleTheme = 'yellow'
     } = options;
     const duration = Math.max(1, end - start);
     const tempDir = join('/tmp', 'cheat-clip', jobId);
@@ -72,18 +76,27 @@ export class FFmpegService {
       ? `,subtitles='${escapedSub}':force_style='FontSize=16,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=3'`
       : '';
 
+    let hookFilter = '';
+    if (hookTitle && hookTitle.trim().length > 0) {
+      const cleanTitle = hookTitle.replace(/['":\\]/g, ' ').slice(0, 50).toUpperCase();
+      const fontPath = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf';
+      const boxColor = hookTitleTheme === 'red' ? 'red@0.9' : (hookTitleTheme === 'neon' ? '0xD4FF00@0.95' : (hookTitleTheme === 'dark' ? 'black@0.85' : 'yellow@0.95'));
+      const fontColor = (hookTitleTheme === 'red' || hookTitleTheme === 'dark') ? 'white' : 'black';
+      hookFilter = `,drawtext=fontfile=${fontPath}:text='${cleanTitle}':fontcolor=${fontColor}:fontsize=34:box=1:boxcolor=${boxColor}:boxborderw=12:x=(w-text_w)/2:y=100:enable='between(t,0,8)'`;
+    }
+
     const offset = Math.max(0, Math.min(1, Number(panOffset) || 0.5));
 
     if (layout === 'split') {
       // Podcast Split-Screen: Stack Host (left crop) & Guest (right crop) top-to-bottom
-      let filterComplex = `[0:v]split=2[v1][v2];[v1]crop=w=iw*0.55:h=ih:x=0:y=0,scale=1080:960[top];[v2]crop=w=iw*0.55:h=ih:x=in_w-out_w:y=0,scale=1080:960[bottom];[top][bottom]vstack=inputs=2${subFilter}[v_out]`;
+      let filterComplex = `[0:v]split=2[v1][v2];[v1]crop=w=iw*0.55:h=ih:x=0:y=0,scale=1080:960[top];[v2]crop=w=iw*0.55:h=ih:x=in_w-out_w:y=0,scale=1080:960[bottom];[top][bottom]vstack=inputs=2${subFilter}${hookFilter}[v_out]`;
       ffmpegArgs.push(
         '-filter_complex', filterComplex,
         '-map', '[v_out]'
       );
     } else if (layout === 'fit-blur') {
       // Fit with Blurred Background (no crop, full view preserved)
-      let filterComplex = `[0:v]split=2[fg][bg];[bg]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:5[bg_blur];[fg]scale=1080:1920:force_original_aspect_ratio=decrease[fg_scaled];[bg_blur][fg_scaled]overlay=(W-w)/2:(H-h)/2${subFilter}[v_out]`;
+      let filterComplex = `[0:v]split=2[fg][bg];[bg]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:5[bg_blur];[fg]scale=1080:1920:force_original_aspect_ratio=decrease[fg_scaled];[bg_blur][fg_scaled]overlay=(W-w)/2:(H-h)/2${subFilter}${hookFilter}[v_out]`;
       ffmpegArgs.push(
         '-filter_complex', filterComplex,
         '-map', '[v_out]'
@@ -98,7 +111,7 @@ export class FFmpegService {
       } else if (aspectRatio === '16:9') {
         videoFilter = 'null';
       }
-      videoFilter += subFilter;
+      videoFilter += subFilter + hookFilter;
       ffmpegArgs.push('-vf', videoFilter);
     }
 
