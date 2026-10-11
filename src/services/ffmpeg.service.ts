@@ -87,14 +87,7 @@ export class FFmpegService {
 
     const offset = Math.max(0, Math.min(1, Number(panOffset) || 0.5));
 
-    if (layout === 'split') {
-      // Podcast Split-Screen: Stack Host (left crop) & Guest (right crop) top-to-bottom
-      let filterComplex = `[0:v]split=2[v1][v2];[v1]crop=w=iw*0.55:h=ih:x=0:y=0,scale=1080:960[top];[v2]crop=w=iw*0.55:h=ih:x=in_w-out_w:y=0,scale=1080:960[bottom];[top][bottom]vstack=inputs=2${subFilter}${hookFilter}[v_out]`;
-      ffmpegArgs.push(
-        '-filter_complex', filterComplex,
-        '-map', '[v_out]'
-      );
-    } else if (layout === 'fit-blur') {
+    if (layout === 'fit-blur') {
       // Fit with Blurred Background (no crop, full view preserved)
       let filterComplex = `[0:v]split=2[fg][bg];[bg]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:5[bg_blur];[fg]scale=1080:1920:force_original_aspect_ratio=decrease[fg_scaled];[bg_blur][fg_scaled]overlay=(W-w)/2:(H-h)/2${subFilter}${hookFilter}[v_out]`;
       ffmpegArgs.push(
