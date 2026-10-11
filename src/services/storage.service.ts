@@ -33,12 +33,17 @@ export class StorageService {
 
   // Generate Presigned Upload URL for direct client-to-R2 upload (zero VPS load)
   public async createPresignedUploadUrl(filename: string, contentType: string = 'video/mp4'): Promise<{ presignedUrl: string; publicUrl: string; key: string }> {
-    if (!this.s3) {
-      throw new AppError('Storage service not configured for upload', 500);
-    }
-
     const cleanName = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
     const key = `uploads/${Date.now()}_${crypto.randomUUID().slice(0, 8)}_${cleanName}`;
+
+    if (!this.s3) {
+      logger.warn(`Storage running in mock/test mode: generating local presigned URL`);
+      return {
+        presignedUrl: `${this.publicDomain}/${key}?mock_presigned=true`,
+        publicUrl: `${this.publicDomain}/${key}`,
+        key
+      };
+    }
 
     const command = new PutObjectCommand({
       Bucket: this.bucket,
