@@ -106,8 +106,8 @@ export class HeatmapController {
     await mkdir(tempDir, { recursive: true });
     const audioPath = join(tempDir, `audio_${uploadId}.mp3`);
 
-    const ffprobePath = process.env.FFPROBE_PATH || '/root/.hermes/tools/ffmpeg-9.0.1-linux-x64/bin/ffprobe';
-    const ffmpegPath = process.env.FFMPEG_PATH || '/root/.hermes/tools/ffmpeg-9.0.1-linux-x64/bin/ffmpeg';
+    const ffprobePath = process.env.FFPROBE_PATH || (await Bun.which('ffprobe')) || '/usr/bin/ffprobe';
+    const ffmpegPath = process.env.FFMPEG_PATH || (await Bun.which('ffmpeg')) || '/usr/bin/ffmpeg';
 
     try {
       logger.info(`Analyzing uploaded video from R2 stream: ${r2Url}`);

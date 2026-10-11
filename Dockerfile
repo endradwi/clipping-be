@@ -21,6 +21,7 @@ COPY . .
 
 ENV PORT=3000
 ENV FFMPEG_PATH=/usr/bin/ffmpeg
+ENV FFPROBE_PATH=/usr/bin/ffprobe
 ENV YTDLP_PATH=/usr/local/bin/yt-dlp
 
 EXPOSE 3000

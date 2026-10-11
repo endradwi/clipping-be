@@ -18,7 +18,7 @@ export class FFmpegService {
   private ffmpegPath: string;
 
   constructor() {
-    this.ffmpegPath = process.env.FFMPEG_PATH || '/root/.hermes/tools/ffmpeg-9.0.1-linux-x64/bin/ffmpeg';
+    this.ffmpegPath = process.env.FFMPEG_PATH || Bun.which('ffmpeg') || '/usr/bin/ffmpeg';
   }
 
   // Zero-Disk Stream Slicing & Vertical 9:16 Cropping
