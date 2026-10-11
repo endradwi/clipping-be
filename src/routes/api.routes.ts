@@ -7,6 +7,7 @@ export const apiRoutes = new Elysia({ prefix: '/api/v1' })
   // Heatmap & Analysis
   .post('/analyze', ({ body }) => heatmapController.analyzeVideo({ body }))
   .post('/upload/presign', ({ body }) => heatmapController.getPresignedUploadUrl({ body }))
+  .post('/upload/direct', ({ request }) => heatmapController.uploadDirectFallback({ request }))
   .post('/analyze/upload', ({ body }) => heatmapController.analyzeUploadedVideo({ body }))
 
   // Clip Rendering & Progress

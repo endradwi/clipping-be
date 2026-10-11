@@ -58,6 +58,23 @@ export class StorageService {
     return { presignedUrl, publicUrl, key };
   }
 
+  // Upload stream buffer directly to R2
+  public async uploadBuffer(buffer: Uint8Array, key: string, contentType: string = 'video/mp4'): Promise<string> {
+    if (!this.s3) {
+      throw new AppError('Storage service not configured', 500);
+    }
+
+    const command = new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType
+    });
+
+    await this.s3.send(command);
+    return `${this.publicDomain}/${key}`;
+  }
+
   // Upload MP4 buffer/file to Cloudflare R2
   public async uploadClip(filePath: string, destinationKey: string): Promise<string> {
     if (!this.s3) {

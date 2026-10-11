@@ -67,6 +67,32 @@ export class HeatmapController {
     }
   }
 
+  // Fallback direct upload through API (in case Cloudflare R2 bucket CORS is not configured)
+  public async uploadDirectFallback({ request }: { request: Request }) {
+    try {
+      const formData = await request.formData();
+      const file = formData.get('file') as File | null;
+      if (!file) {
+        return errorResponse('No file provided in form data', 'VALIDATION_ERROR', 400);
+      }
+
+      const filename = file.name || 'uploaded_video.mp4';
+      const cleanName = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const key = `uploads/${Date.now()}_${crypto.randomUUID().slice(0, 8)}_${cleanName}`;
+
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const publicUrl = await storageService.uploadBuffer(bytes, key, file.type || 'video/mp4');
+
+      return successResponse({
+        publicUrl,
+        key
+      });
+    } catch (err: any) {
+      logger.error(`Direct fallback upload failed: ${err.message}`);
+      return errorResponse(err.message, 'FALLBACK_UPLOAD_ERROR');
+    }
+  }
+
   // Analyze directly uploaded video from R2 URL (stream probe + audio Whisper)
   public async analyzeUploadedVideo({ body }: { body: any }) {
     const parse = AnalyzeUploadSchema.safeParse(body);
