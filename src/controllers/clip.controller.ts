@@ -105,7 +105,9 @@ export class ClipController {
           audioUrl,
           start: input.start,
           end: input.end,
-          aspectRatio: input.aspectRatio
+          aspectRatio: input.aspectRatio,
+          layout: input.layout,
+          panOffset: input.panOffset
         });
 
         try {
