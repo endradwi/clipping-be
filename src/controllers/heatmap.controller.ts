@@ -126,12 +126,12 @@ export class HeatmapController {
       const probeData = JSON.parse(probeText || '{}');
       const duration = Math.max(10, Math.round(Number(probeData.format?.duration || 60)));
 
-      // 2. Extract downsampled audio (16kHz mono mp3) with intelligent chunking for long videos (up to 2h-3h)
-      const CHUNK_SEC = 600; // 10 minutes per chunk (audio size ~2.4MB, well under Groq 25MB limit)
+      // 2. Extract downsampled audio (16kHz mono mp3) - single pass up to 90 mins (~14MB, well under Groq 25MB cap)
+      const CHUNK_SEC = 5400; // 90 minutes per chunk
       const allSegments: Array<{ start: number; duration: number; text: string }> = [];
 
       if (duration <= CHUNK_SEC) {
-        // Fast path for clips & short videos (<= 10 mins)
+        // Blazing fast single-pass extraction for videos up to 1.5 hours
         const audioPath = join(tempDir, `audio_${uploadId}_0.mp3`);
         const audioProc = Bun.spawn([
           ffmpegPath,
@@ -139,7 +139,7 @@ export class HeatmapController {
           '-ss', '0',
           '-t', String(duration),
           '-i', r2Url,
-          '-vn', '-ar', '16000', '-ac', '1', '-ab', '32k',
+          '-vn', '-map', '0:a:0?', '-ar', '16000', '-ac', '1', '-ab', '32k',
           audioPath
         ], { stdout: 'pipe', stderr: 'pipe' });
         await audioProc.exited;
@@ -148,9 +148,9 @@ export class HeatmapController {
         await unlink(audioPath).catch(() => {});
         allSegments.push(...segments);
       } else {
-        // High-scale chunking for long podcasts / VODs (up to 2+ hours)
+        // High-scale chunking for massive 2h+ VODs
         const numChunks = Math.ceil(duration / CHUNK_SEC);
-        logger.info(`Long video detected (${Math.round(duration / 60)} mins). Processing ${numChunks} audio chunks sequentially to protect VPS memory...`);
+        logger.info(`Ultra long video detected (${Math.round(duration / 60)} mins). Processing ${numChunks} chunks sequentially...`);
 
         for (let i = 0; i < numChunks; i++) {
           const chunkStart = i * CHUNK_SEC;
@@ -164,7 +164,7 @@ export class HeatmapController {
             '-ss', String(chunkStart),
             '-t', String(chunkDur),
             '-i', r2Url,
-            '-vn', '-ar', '16000', '-ac', '1', '-ab', '32k',
+            '-vn', '-map', '0:a:0?', '-ar', '16000', '-ac', '1', '-ab', '32k',
             chunkAudioPath
           ], { stdout: 'pipe', stderr: 'pipe' });
           await audioProc.exited;
