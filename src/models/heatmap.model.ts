@@ -4,6 +4,18 @@ export const AnalyzeUrlSchema = z.object({
   url: z.string().url({ message: 'Valid YouTube URL required' })
 });
 
+export const PresignUploadSchema = z.object({
+  filename: z.string().min(1, { message: 'Filename required' }),
+  contentType: z.string().optional().default('video/mp4'),
+  size: z.number().optional()
+});
+
+export const AnalyzeUploadSchema = z.object({
+  r2Url: z.string().url({ message: 'Valid R2 video URL required' }),
+  title: z.string().optional(),
+  filename: z.string().optional()
+});
+
 export type AnalyzeUrlInput = z.infer<typeof AnalyzeUrlSchema>;
 
 export interface RawHeatmapPoint {
@@ -38,4 +50,6 @@ export interface VideoAnalysisResult {
   heatmapPoints: RawHeatmapPoint[];
   topClips: CandidateClip[];
   transcript: TranscriptLine[];
+  isUploadedVideo?: boolean;
+  directVideoUrl?: string;
 }

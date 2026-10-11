@@ -27,6 +27,21 @@ export class ClipController {
     }
 
     const input = parse.data;
+
+    // Zero-CPU optimization: Check if this exact clip was already rendered previously
+    const existing = await dbService.findMatchingCompletedJob(input.url, input.start, input.end);
+    if (existing && existing.r2Url) {
+      logger.info(`Reusing previously rendered clip for url=${input.url} [${input.start}s - ${input.end}s]: ${existing.r2Url}`);
+      return successResponse({
+        jobId: existing.id,
+        status: 'completed',
+        r2Url: existing.r2Url,
+        progressPercent: 100,
+        cached: true,
+        message: 'Clip already rendered previously. Instant delivery.'
+      });
+    }
+
     const mutexKey = renderMutex.generateKey(input.url, input.start, input.end);
     const jobId = crypto.randomUUID();
 
@@ -62,7 +77,21 @@ export class ClipController {
         await dbService.saveJob(jobEntity);
         emitProgress(jobId, { status: 'downloading', progressPercent: 20 });
 
-        const { videoUrl, audioUrl } = await ytdlpService.getDirectStreamUrls(input.url);
+        let videoUrl = input.url;
+        let audioUrl: string | undefined = undefined;
+
+        // If not a direct video URL, extract stream URLs from YouTube
+        const isDirectVideo = input.url.includes('r2.dev') || 
+                              input.url.includes('r2.cloudflarestorage') || 
+                              input.url.includes('.mp4') || 
+                              input.url.includes('.webm') ||
+                              input.url.includes('/uploads/');
+
+        if (!isDirectVideo) {
+          const resolved = await ytdlpService.getDirectStreamUrls(input.url);
+          videoUrl = resolved.videoUrl;
+          audioUrl = resolved.audioUrl;
+        }
 
         // Step 2: Stream slicing & vertical cropping via FFmpeg
         jobEntity.status = 'slicing';
@@ -159,6 +188,16 @@ export class ClipController {
       set.status = 500;
       return `Download error: ${err.message}`;
     }
+  }
+
+  // Query history of rendered clips for a given video
+  public async getHistory({ query }: { query: any }) {
+    const url = query?.url;
+    if (!url) {
+      return errorResponse('URL parameter required', 'VALIDATION_ERROR', 400);
+    }
+    const jobs = await dbService.getJobsByUrl(url);
+    return successResponse(jobs);
   }
 
   // Server-Sent Events (SSE) endpoint for real-time progress

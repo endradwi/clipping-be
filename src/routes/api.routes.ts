@@ -6,9 +6,12 @@ import { settingsController } from '../controllers/settings.controller';
 export const apiRoutes = new Elysia({ prefix: '/api/v1' })
   // Heatmap & Analysis
   .post('/analyze', ({ body }) => heatmapController.analyzeVideo({ body }))
+  .post('/upload/presign', ({ body }) => heatmapController.getPresignedUploadUrl({ body }))
+  .post('/analyze/upload', ({ body }) => heatmapController.analyzeUploadedVideo({ body }))
 
   // Clip Rendering & Progress
   .post('/clips/render', ({ body }) => clipController.triggerRender({ body }))
+  .get('/clips/history', ({ query }) => clipController.getHistory({ query }))
   .get('/clips/:id', ({ params }) => clipController.getJob({ params }))
   .get('/clips/:id/progress', ({ params }) => clipController.streamProgress({ params }))
   .get('/clips/:id/download', ({ params, set }) => clipController.downloadClip({ params, set }))

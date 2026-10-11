@@ -1,4 +1,4 @@
-import OpenAI from 'openai';
+import OpenAI, { toFile } from 'openai';
 import { logger } from '../common/logger';
 import { EncryptedSettings } from '../common/cookies';
 
@@ -74,6 +74,40 @@ Respond ONLY in JSON format:
     }
   }
 
+  // Transcribe audio using Groq LPU Whisper (returns text & timestamped segments)
+  public async transcribeAudioWithSegments(audioFilePath: string): Promise<{ text: string; segments: Array<{ start: number; duration: number; text: string }> }> {
+    if (!this.defaultGroqClient) {
+      logger.warn('Groq client not configured, skipping Whisper transcription');
+      return { text: '', segments: [] };
+    }
+
+    try {
+      logger.info(`Transcribing audio via Groq Whisper LPU: ${audioFilePath}`);
+      const file = Bun.file(audioFilePath);
+      const fileBytes = await file.arrayBuffer();
+      const uploadable = await toFile(Buffer.from(fileBytes), 'audio.mp3', { type: 'audio/mpeg' });
+      const transcription: any = await this.defaultGroqClient.audio.transcriptions.create({
+        file: uploadable,
+        model: 'whisper-large-v3',
+        response_format: 'verbose_json'
+      });
+
+      const segments = (transcription.segments || []).map((s: any) => ({
+        start: Number(s.start || 0),
+        duration: Math.max(0.5, Number(s.end || 0) - Number(s.start || 0)),
+        text: String(s.text || '').trim()
+      }));
+
+      return {
+        text: transcription.text || '',
+        segments
+      };
+    } catch (err: any) {
+      logger.error(`Groq Whisper transcription failed: ${err.message}`);
+      return { text: '', segments: [] };
+    }
+  }
+
   // Transcribe audio using Groq LPU Whisper (0.8s execution)
   public async transcribeAudio(audioFilePath: string): Promise<string> {
     if (!this.defaultGroqClient) {
@@ -84,8 +118,10 @@ Respond ONLY in JSON format:
     try {
       logger.info(`Transcribing audio via Groq Whisper LPU: ${audioFilePath}`);
       const file = Bun.file(audioFilePath);
+      const fileBytes = await file.arrayBuffer();
+      const uploadable = await toFile(Buffer.from(fileBytes), 'audio.mp3', { type: 'audio/mpeg' });
       const transcription = await this.defaultGroqClient.audio.transcriptions.create({
-        file: new File([await file.arrayBuffer()], 'audio.mp3', { type: 'audio/mpeg' }),
+        file: uploadable,
         model: 'whisper-large-v3',
         response_format: 'verbose_json'
       });

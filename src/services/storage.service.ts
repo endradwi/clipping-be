@@ -1,5 +1,7 @@
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { logger } from '../common/logger';
+import { AppError } from '../common/errors';
 
 export class StorageService {
   private s3: S3Client | null = null;
@@ -17,7 +19,7 @@ export class StorageService {
     if (accountId && accessKeyId && secretAccessKey) {
       this.s3 = new S3Client({
         region: 'auto',
-        endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+        endpoint: process.env.R2_ENDPOINT || `https://${accountId}.r2.cloudflarestorage.com`,
         credentials: {
           accessKeyId,
           secretAccessKey
@@ -27,6 +29,28 @@ export class StorageService {
     } else {
       logger.warn('Cloudflare R2 credentials incomplete, falling back to local storage simulation');
     }
+  }
+
+  // Generate Presigned Upload URL for direct client-to-R2 upload (zero VPS load)
+  public async createPresignedUploadUrl(filename: string, contentType: string = 'video/mp4'): Promise<{ presignedUrl: string; publicUrl: string; key: string }> {
+    if (!this.s3) {
+      throw new AppError('Storage service not configured for upload', 500);
+    }
+
+    const cleanName = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const key = `uploads/${Date.now()}_${crypto.randomUUID().slice(0, 8)}_${cleanName}`;
+
+    const command = new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+      ContentType: contentType
+    });
+
+    const presignedUrl = await getSignedUrl(this.s3 as any, command, { expiresIn: 3600 });
+    const publicUrl = `${this.publicDomain}/${key}`;
+
+    logger.info(`Generated presigned upload URL for key=${key}`);
+    return { presignedUrl, publicUrl, key };
   }
 
   // Upload MP4 buffer/file to Cloudflare R2

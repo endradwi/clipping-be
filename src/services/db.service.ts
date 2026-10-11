@@ -81,6 +81,99 @@ export class DbService {
 
     return null;
   }
+
+  // Find previously rendered completed clip matching same video and time range
+  public async findMatchingCompletedJob(url: string, start: number, end: number): Promise<ClipJobEntity | null> {
+    for (const job of this.inMemoryJobs.values()) {
+      if (
+        job.url === url &&
+        Math.abs(job.start - start) < 1 &&
+        Math.abs(job.end - end) < 1 &&
+        job.status === 'completed' &&
+        job.r2Url
+      ) {
+        return job;
+      }
+    }
+
+    if (this.supabase) {
+      try {
+        const { data } = await this.supabase
+          .from('render_jobs')
+          .select('*')
+          .eq('youtube_url', url)
+          .eq('status', 'completed')
+          .gte('start_time', start - 1)
+          .lte('start_time', start + 1)
+          .maybeSingle();
+
+        if (data && data.r2_url) {
+          return {
+            id: data.id,
+            url: data.youtube_url,
+            title: data.title,
+            start: data.start_time,
+            end: data.end_time,
+            duration: data.duration,
+            status: data.status,
+            progressPercent: data.progress_percent,
+            r2Url: data.r2_url,
+            burnSubtitles: data.burn_subtitles,
+            error: data.error_message,
+            createdAt: data.created_at,
+            completedAt: data.completed_at
+          };
+        }
+      } catch {}
+    }
+
+    return null;
+  }
+
+  // Retrieve all finished clip history for a given video/URL
+  public async getJobsByUrl(url: string): Promise<ClipJobEntity[]> {
+    const results: ClipJobEntity[] = [];
+
+    for (const job of this.inMemoryJobs.values()) {
+      if (job.url === url && job.status === 'completed') {
+        results.push(job);
+      }
+    }
+
+    if (this.supabase) {
+      try {
+        const { data } = await this.supabase
+          .from('render_jobs')
+          .select('*')
+          .eq('youtube_url', url)
+          .eq('status', 'completed');
+
+        if (data) {
+          for (const row of data) {
+            if (!results.some(r => r.id === row.id)) {
+              results.push({
+                id: row.id,
+                url: row.youtube_url,
+                title: row.title,
+                start: row.start_time,
+                end: row.end_time,
+                duration: row.duration,
+                status: row.status,
+                progressPercent: row.progress_percent,
+                r2Url: row.r2_url,
+                burnSubtitles: row.burn_subtitles,
+                error: row.error_message,
+                createdAt: row.created_at,
+                completedAt: row.completed_at
+              });
+            }
+          }
+        }
+      } catch {}
+    }
+
+    return results;
+  }
 }
 
 export const dbService = new DbService();
