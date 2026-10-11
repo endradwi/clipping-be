@@ -75,14 +75,14 @@ Respond ONLY in JSON format:
   }
 
   // Transcribe audio using Groq LPU Whisper (returns text & timestamped segments)
-  public async transcribeAudioWithSegments(audioFilePath: string): Promise<{ text: string; segments: Array<{ start: number; duration: number; text: string }> }> {
+  public async transcribeAudioWithSegments(audioFilePath: string, timeOffset: number = 0): Promise<{ text: string; segments: Array<{ start: number; duration: number; text: string }> }> {
     if (!this.defaultGroqClient) {
       logger.warn('Groq client not configured, skipping Whisper transcription');
       return { text: '', segments: [] };
     }
 
     try {
-      logger.info(`Transcribing audio via Groq Whisper LPU: ${audioFilePath}`);
+      logger.info(`Transcribing audio via Groq Whisper LPU: ${audioFilePath} (offset=${timeOffset}s)`);
       const file = Bun.file(audioFilePath);
       const fileBytes = await file.arrayBuffer();
       const uploadable = await toFile(Buffer.from(fileBytes), 'audio.mp3', { type: 'audio/mpeg' });
@@ -93,7 +93,7 @@ Respond ONLY in JSON format:
       });
 
       const segments = (transcription.segments || []).map((s: any) => ({
-        start: Number(s.start || 0),
+        start: Number(s.start || 0) + timeOffset,
         duration: Math.max(0.5, Number(s.end || 0) - Number(s.start || 0)),
         text: String(s.text || '').trim()
       }));

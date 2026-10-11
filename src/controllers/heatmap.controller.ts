@@ -126,27 +126,57 @@ export class HeatmapController {
       const probeData = JSON.parse(probeText || '{}');
       const duration = Math.max(10, Math.round(Number(probeData.format?.duration || 60)));
 
-      // 2. Extract tiny downsampled audio (16kHz mono mp3 ~2MB) for Whisper transcription
-      const audioProc = Bun.spawn([
-        ffmpegPath,
-        '-y', '-hide_banner', '-loglevel', 'warning',
-        '-ss', '0',
-        '-t', String(duration),
-        '-i', r2Url,
-        '-vn', '-ar', '16000', '-ac', '1', '-ab', '48k',
-        audioPath
-      ], { stdout: 'pipe', stderr: 'pipe' });
+      // 2. Extract downsampled audio (16kHz mono mp3) with intelligent chunking for long videos (up to 2h-3h)
+      const CHUNK_SEC = 600; // 10 minutes per chunk (audio size ~2.4MB, well under Groq 25MB limit)
+      const allSegments: Array<{ start: number; duration: number; text: string }> = [];
 
-      await audioProc.exited;
+      if (duration <= CHUNK_SEC) {
+        // Fast path for clips & short videos (<= 10 mins)
+        const audioPath = join(tempDir, `audio_${uploadId}_0.mp3`);
+        const audioProc = Bun.spawn([
+          ffmpegPath,
+          '-y', '-hide_banner', '-loglevel', 'warning',
+          '-ss', '0',
+          '-t', String(duration),
+          '-i', r2Url,
+          '-vn', '-ar', '16000', '-ac', '1', '-ab', '32k',
+          audioPath
+        ], { stdout: 'pipe', stderr: 'pipe' });
+        await audioProc.exited;
 
-      // 3. Fast Groq Whisper LPU transcription with word/sentence timestamps
-      const { segments } = await aiService.transcribeAudioWithSegments(audioPath);
+        const { segments } = await aiService.transcribeAudioWithSegments(audioPath, 0);
+        await unlink(audioPath).catch(() => {});
+        allSegments.push(...segments);
+      } else {
+        // High-scale chunking for long podcasts / VODs (up to 2+ hours)
+        const numChunks = Math.ceil(duration / CHUNK_SEC);
+        logger.info(`Long video detected (${Math.round(duration / 60)} mins). Processing ${numChunks} audio chunks sequentially to protect VPS memory...`);
 
-      // Clean up audio immediately
-      await unlink(audioPath).catch(() => {});
+        for (let i = 0; i < numChunks; i++) {
+          const chunkStart = i * CHUNK_SEC;
+          const chunkDur = Math.min(CHUNK_SEC, duration - chunkStart);
+          const chunkAudioPath = join(tempDir, `audio_${uploadId}_${i}.mp3`);
 
-      // 4. Generate candidate clips from speech dialogue intervals
-      const topClips = heatmapService.computeClipsFromTranscript(segments, duration, 30, 24);
+          logger.info(`Extracting audio chunk ${i + 1}/${numChunks} [${chunkStart}s - ${chunkStart + chunkDur}s]`);
+          const audioProc = Bun.spawn([
+            ffmpegPath,
+            '-y', '-hide_banner', '-loglevel', 'warning',
+            '-ss', String(chunkStart),
+            '-t', String(chunkDur),
+            '-i', r2Url,
+            '-vn', '-ar', '16000', '-ac', '1', '-ab', '32k',
+            chunkAudioPath
+          ], { stdout: 'pipe', stderr: 'pipe' });
+          await audioProc.exited;
+
+          const { segments } = await aiService.transcribeAudioWithSegments(chunkAudioPath, chunkStart);
+          await unlink(chunkAudioPath).catch(() => {});
+          allSegments.push(...segments);
+        }
+      }
+
+      // 3. Generate candidate clips across entire duration from speech dialogue intervals
+      const topClips = heatmapService.computeClipsFromTranscript(allSegments, duration, 30, 24);
 
       const result: VideoAnalysisResult = {
         videoId: uploadId,
@@ -156,14 +186,13 @@ export class HeatmapController {
         thumbnail: '',
         heatmapPoints: [],
         topClips,
-        transcript: segments,
+        transcript: allSegments,
         isUploadedVideo: true,
         directVideoUrl: r2Url
       };
 
       return successResponse(result);
     } catch (err: any) {
-      await unlink(audioPath).catch(() => {});
       logger.error(`Analyze uploaded video failed for ${r2Url}: ${err.message}`);
       return errorResponse(err.message, 'ANALYZE_UPLOAD_ERROR');
     }

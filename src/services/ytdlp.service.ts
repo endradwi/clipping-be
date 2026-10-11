@@ -43,9 +43,10 @@ export class YtDlpService {
       this.ytDlpPath,
       '--skip-download',
       '--dump-json',
+      '--extractor-args', 'youtube:player_client=ios,android,web',
       '--remote-components', 'ejs:github',
       '--no-warnings',
-      '--socket-timeout', '15',
+      '--socket-timeout', '20',
       ...cookiesArg,
       url
     ];
@@ -139,8 +140,11 @@ export class YtDlpService {
     const proc = Bun.spawn([
       this.ytDlpPath,
       '--remote-components', 'ejs:github',
+      '--extractor-args', 'youtube:player_client=ios,android,web',
+      '-f', 'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/best',
       '-g',
       '--no-warnings',
+      '--socket-timeout', '20',
       ...cookiesArg,
       url
     ], {
