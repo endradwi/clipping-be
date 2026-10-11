@@ -5,7 +5,7 @@ export const CreateClipSchema = z.object({
   start: z.number().min(0, { message: 'Start time must be >= 0' }),
   end: z.number().min(1, { message: 'End time must be > 0' }),
   aspectRatio: z.enum(['9:16', '1:1', '16:9', '4:5']).default('9:16'),
-  layout: z.enum(['single', 'split', 'fit-blur']).default('single'),
+  layout: z.enum(['single', 'fit-blur']).default('single'),
   panOffset: z.number().min(0).max(1).default(0.5),
   burnSubtitles: z.boolean().default(true),
   title: z.string().optional(),

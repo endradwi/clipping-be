@@ -10,7 +10,7 @@ export interface SliceOptions {
   start: number;
   end: number;
   aspectRatio?: '9:16' | '1:1' | '16:9' | '4:5';
-  layout?: 'single' | 'split' | 'fit-blur';
+  layout?: 'single' | 'fit-blur';
   panOffset?: number; // 0.0 (left/host) to 1.0 (right/guest), 0.5 = center
   subtitlePath?: string | null;
   hookTitle?: string;
