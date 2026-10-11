@@ -9,7 +9,7 @@ export interface SliceOptions {
   audioUrl?: string;
   start: number;
   end: number;
-  aspectRatio?: '9:16' | '1:1' | '16:9';
+  aspectRatio?: '9:16' | '1:1' | '16:9' | '4:5';
   subtitlePath?: string | null;
   onProgress?: (percent: number) => void;
 }
@@ -38,6 +38,8 @@ export class FFmpegService {
     let videoFilter = 'crop=ih*(9/16):ih'; // default 9:16 center crop
     if (aspectRatio === '1:1') {
       videoFilter = 'crop=ih:ih';
+    } else if (aspectRatio === '4:5') {
+      videoFilter = 'crop=ih*(4/5):ih';
     } else if (aspectRatio === '16:9') {
       videoFilter = 'null';
     }

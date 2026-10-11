@@ -4,7 +4,7 @@ export const CreateClipSchema = z.object({
   url: z.string().url({ message: 'Must be a valid URL' }),
   start: z.number().min(0, { message: 'Start time must be >= 0' }),
   end: z.number().min(1, { message: 'End time must be > 0' }),
-  aspectRatio: z.enum(['9:16', '1:1', '16:9']).default('9:16'),
+  aspectRatio: z.enum(['9:16', '1:1', '16:9', '4:5']).default('9:16'),
   burnSubtitles: z.boolean().default(true),
   title: z.string().optional()
 }).refine(data => data.end > data.start, {
