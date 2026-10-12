@@ -5,22 +5,27 @@ import { aiService } from '../services/ai.service';
 import { AnalyzeUrlSchema, PresignUploadSchema, AnalyzeUploadSchema, VideoAnalysisResult } from '../models/heatmap.model';
 import { successResponse, errorResponse } from '../views/response.view';
 import { logger } from '../common/logger';
+import { alertService } from '../services/alert.service';
 import { mkdir, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 
 export class HeatmapController {
   // Analyze YouTube Video via telemetry heatmap
-  public async analyzeVideo({ body }: { body: any }) {
+  public async analyzeVideo({ body, request }: { body: any; request?: Request }) {
     const parse = AnalyzeUrlSchema.safeParse(body);
     if (!parse.success) {
       return errorResponse(parse.error.errors[0]?.message || 'Invalid URL payload', 'VALIDATION_ERROR', 422);
     }
 
     const { url } = parse.data;
+    const client = alertService.extractClientInfo(request);
 
     try {
       // 1. Fetch metadata, heatmap curves, and spoken transcript
       const meta = await ytdlpService.extractMetadata(url);
+
+      // Notify spy alert
+      alertService.notifyAnalyze(meta.title || url, meta.duration, client.ip, client.device);
 
       // 2. Compute up to 24 candidate clips (no restrictive 3-clip limits)
       const topClips = heatmapService.computeTopClips(meta.heatmap, meta.duration, 30, 24);
@@ -44,7 +49,7 @@ export class HeatmapController {
   }
 
   // Generate Presigned Upload URL for direct browser-to-R2 upload (zero VPS load)
-  public async getPresignedUploadUrl({ body }: { body: any }) {
+  public async getPresignedUploadUrl({ body, request }: { body: any; request?: Request }) {
     const parse = PresignUploadSchema.safeParse(body);
     if (!parse.success) {
       return errorResponse(parse.error.errors[0]?.message || 'Invalid upload parameters', 'VALIDATION_ERROR', 422);
@@ -55,6 +60,9 @@ export class HeatmapController {
         parse.data.filename,
         parse.data.contentType
       );
+
+      const client = alertService.extractClientInfo(request);
+      alertService.notifyUpload(parse.data.filename, client.ip, client.device);
 
       return successResponse({
         presignedUrl,
@@ -94,13 +102,14 @@ export class HeatmapController {
   }
 
   // Analyze directly uploaded video from R2 URL (stream probe + audio Whisper)
-  public async analyzeUploadedVideo({ body }: { body: any }) {
+  public async analyzeUploadedVideo({ body, request }: { body: any; request?: Request }) {
     const parse = AnalyzeUploadSchema.safeParse(body);
     if (!parse.success) {
       return errorResponse(parse.error.errors[0]?.message || 'Invalid uploaded video payload', 'VALIDATION_ERROR', 422);
     }
 
     const { r2Url, title, filename } = parse.data;
+    const client = alertService.extractClientInfo(request);
     const uploadId = crypto.randomUUID();
     const tempDir = join('/tmp', 'cheat-clip');
     await mkdir(tempDir, { recursive: true });
@@ -125,6 +134,8 @@ export class HeatmapController {
       await probeProc.exited;
       const probeData = JSON.parse(probeText || '{}');
       const duration = Math.max(10, Math.round(Number(probeData.format?.duration || 60)));
+
+      alertService.notifyAnalyze(title || filename || 'Uploaded Video', duration, client.ip, client.device);
 
       // 2. Extract downsampled audio (16kHz mono mp3) - single pass up to 90 mins (~14MB, well under Groq 25MB cap)
       const CHUNK_SEC = 5400; // 90 minutes per chunk

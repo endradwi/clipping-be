@@ -5,13 +5,13 @@ import { settingsController } from '../controllers/settings.controller';
 
 export const apiRoutes = new Elysia({ prefix: '/api/v1' })
   // Heatmap & Analysis
-  .post('/analyze', ({ body }) => heatmapController.analyzeVideo({ body }))
-  .post('/upload/presign', ({ body }) => heatmapController.getPresignedUploadUrl({ body }))
+  .post('/analyze', ({ body, request }) => heatmapController.analyzeVideo({ body, request }))
+  .post('/upload/presign', ({ body, request }) => heatmapController.getPresignedUploadUrl({ body, request }))
   .post('/upload/direct', ({ request }) => heatmapController.uploadDirectFallback({ request }))
-  .post('/analyze/upload', ({ body }) => heatmapController.analyzeUploadedVideo({ body }))
+  .post('/analyze/upload', ({ body, request }) => heatmapController.analyzeUploadedVideo({ body, request }))
 
   // Clip Rendering & Progress
-  .post('/clips/render', ({ body }) => clipController.triggerRender({ body }))
+  .post('/clips/render', ({ body, request }) => clipController.triggerRender({ body, request }))
   .get('/clips/history', ({ query }) => clipController.getHistory({ query }))
   .get('/clips/:id', ({ params }) => clipController.getJob({ params }))
   .get('/clips/:id/progress', ({ params }) => clipController.streamProgress({ params }))

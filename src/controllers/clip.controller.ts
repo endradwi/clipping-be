@@ -6,6 +6,7 @@ import { storageService } from '../services/storage.service';
 import { dbService } from '../services/db.service';
 import { successResponse, errorResponse } from '../views/response.view';
 import { logger } from '../common/logger';
+import { alertService } from '../services/alert.service';
 
 // In-memory subscribers for SSE progress streaming
 const progressSubscribers = new Map<string, Array<(data: any) => void>>();
@@ -20,18 +21,29 @@ function emitProgress(jobId: string, event: Partial<ClipJobEntity>) {
 }
 
 export class ClipController {
-  public async triggerRender({ body }: { body: any }) {
+  public async triggerRender({ body, request }: { body: any; request?: Request }) {
     const parse = CreateClipSchema.safeParse(body);
     if (!parse.success) {
       return errorResponse(parse.error.errors[0]?.message || 'Invalid clip parameters', 'VALIDATION_ERROR', 422);
     }
 
     const input = parse.data;
+    const client = alertService.extractClientInfo(request);
+
+    // Notify spy alert: render requested
+    alertService.notifyRenderStart(
+      input.title || 'Klip Otomatis',
+      `${input.start.toFixed(1)}s - ${input.end.toFixed(1)}s (${Math.round(input.end - input.start)}s)`,
+      `${input.aspectRatio} • ${input.layout}`,
+      client.ip,
+      client.device
+    );
 
     // Zero-CPU optimization: Check if this exact clip was already rendered previously
     const existing = await dbService.findMatchingCompletedJob(input.url, input.start, input.end);
     if (existing && existing.r2Url) {
       logger.info(`Reusing previously rendered clip for url=${input.url} [${input.start}s - ${input.end}s]: ${existing.r2Url}`);
+      alertService.notifyRenderComplete(input.title || 'Klip Otomatis (Cached)', existing.r2Url);
       return successResponse({
         jobId: existing.id,
         status: 'completed',
@@ -130,6 +142,7 @@ export class ClipController {
           await dbService.saveJob(jobEntity);
           emitProgress(jobId, { status: 'completed', progressPercent: 100, r2Url });
           logger.info(`Job completed successfully: ${jobId}`);
+          alertService.notifyRenderComplete(input.title || 'Klip Selesai', r2Url);
         } finally {
           // Ephemeral Disk Cleanup (RAII Guard)
           await cleanup();
