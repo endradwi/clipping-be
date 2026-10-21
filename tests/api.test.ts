@@ -82,4 +82,9 @@ describe('Elysia API Endpoints', () => {
     expect(data.success).toBe(false);
     expect(data.error.code).toBe('VALIDATION_ERROR');
   });
+
+  it('GET /api/v1/media/stream returns 400 when url parameter is missing', async () => {
+    const res = await app.handle(new Request('http://localhost:3000/api/v1/media/stream'));
+    expect(res.status).toBe(400);
+  });
 });

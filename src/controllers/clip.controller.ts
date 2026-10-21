@@ -209,6 +209,55 @@ export class ClipController {
     }
   }
 
+  // Video Stream Proxy with byte-range seeking & CORS headers (bypasses ISP blocks on *.r2.dev)
+  public async streamMedia({ query, request, set }: { query: any; request: Request; set: any }) {
+    const rawUrl = query?.url;
+    if (!rawUrl) {
+      set.status = 400;
+      return 'URL parameter required';
+    }
+
+    try {
+      const range = request.headers.get('range');
+      const fetchHeaders: Record<string, string> = {};
+      if (range) {
+        fetchHeaders['Range'] = range;
+      }
+
+      const response = await fetch(rawUrl, {
+        headers: fetchHeaders
+      });
+
+      if (!response.ok && response.status !== 206) {
+        set.status = response.status;
+        return `Upstream storage error: ${response.statusText}`;
+      }
+
+      const responseHeaders = new Headers();
+      responseHeaders.set('Content-Type', response.headers.get('content-type') || 'video/mp4');
+      responseHeaders.set('Accept-Ranges', 'bytes');
+      responseHeaders.set('Access-Control-Allow-Origin', '*');
+      responseHeaders.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+      responseHeaders.set('Access-Control-Allow-Headers', 'Range, Content-Type');
+
+      if (response.headers.get('content-range')) {
+        responseHeaders.set('Content-Range', response.headers.get('content-range')!);
+      }
+      if (response.headers.get('content-length')) {
+        responseHeaders.set('Content-Length', response.headers.get('content-length')!);
+      }
+
+      return new Response(response.body, {
+        status: response.status,
+        headers: responseHeaders
+      });
+    } catch (err: any) {
+      logger.error(`Media stream proxy failed for ${rawUrl}: ${err.message}`);
+      set.status = 500;
+      return `Media stream error: ${err.message}`;
+    }
+  }
+
   // Query history of rendered clips for a given video
   public async getHistory({ query }: { query: any }) {
     const url = query?.url;
