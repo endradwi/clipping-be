@@ -50,4 +50,36 @@ describe('Elysia API Endpoints', () => {
     expect(data.success).toBe(true);
     expect(Array.isArray(data.data)).toBe(true);
   });
+
+  it('POST /api/v1/clips/recommendation generates tailored metadata for TikTok, Shorts, and Reels', async () => {
+    const res = await app.handle(new Request('http://localhost:3000/api/v1/clips/recommendation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        transcriptSnippet: 'Kunci sukses affiliate marketing adalah konsistensi dan paham algoritma platform.',
+        brief: 'Wajib sertakan hashtag #ClipperPro dan fokus tips bisnis.',
+        videoTitle: 'Cara Sukses Affiliate 2026'
+      })
+    }));
+    expect(res.status).toBe(200);
+    const data = await res.json() as any;
+    expect(data.success).toBe(true);
+    expect(data.data.tiktok).toBeDefined();
+    expect(data.data.tiktok.hashtags.length).toBeGreaterThan(0);
+    expect(data.data.youtubeShorts).toBeDefined();
+    expect(data.data.youtubeShorts.title.length).toBeLessThanOrEqual(50);
+    expect(data.data.instagramReels).toBeDefined();
+    expect(data.data.briefCompliance).toBeDefined();
+  }, 10000);
+
+  it('POST /api/v1/clips/recommendation returns validation error when transcript is missing', async () => {
+    const res = await app.handle(new Request('http://localhost:3000/api/v1/clips/recommendation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brief: 'Some brief' })
+    }));
+    const data = await res.json() as any;
+    expect(data.success).toBe(false);
+    expect(data.error.code).toBe('VALIDATION_ERROR');
+  });
 });

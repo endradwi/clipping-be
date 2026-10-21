@@ -1,9 +1,11 @@
-import { CreateClipSchema, ClipJobEntity } from '../models/clip.model';
+import { CreateClipSchema, ClipJobEntity, GetRecommendationSchema } from '../models/clip.model';
 import { renderMutex } from '../common/mutex.guard';
 import { ytdlpService } from '../services/ytdlp.service';
 import { ffmpegService } from '../services/ffmpeg.service';
 import { storageService } from '../services/storage.service';
 import { dbService } from '../services/db.service';
+import { aiService } from '../services/ai.service';
+import { parseCredentialsFromHeaders } from '../common/cookies';
 import { successResponse, errorResponse } from '../views/response.view';
 import { logger } from '../common/logger';
 import { alertService } from '../services/alert.service';
@@ -265,6 +267,30 @@ export class ClipController {
         }
       }
     );
+  }
+
+  // Generate platform-specific upload recommendations & brief compliance
+  public async getClipRecommendation({ body, headers }: { body: any; headers?: Record<string, string | undefined> }) {
+    const parse = GetRecommendationSchema.safeParse(body);
+    if (!parse.success) {
+      return errorResponse(parse.error.errors[0]?.message || 'Invalid recommendation payload', 'VALIDATION_ERROR', 422);
+    }
+
+    const { transcriptSnippet, brief, videoTitle } = parse.data;
+    const customCreds = headers ? parseCredentialsFromHeaders(headers) : undefined;
+
+    try {
+      const recommendation = await aiService.generatePlatformRecommendations(
+        transcriptSnippet,
+        brief,
+        videoTitle,
+        customCreds
+      );
+      return successResponse(recommendation);
+    } catch (err: any) {
+      logger.error(`Generate recommendation failed: ${err.message}`);
+      return errorResponse(err.message, 'RECOMMENDATION_ERROR');
+    }
   }
 }
 

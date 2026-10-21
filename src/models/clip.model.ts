@@ -38,3 +38,12 @@ export const ClipJobEntitySchema = z.object({
 });
 
 export type ClipJobEntity = z.infer<typeof ClipJobEntitySchema>;
+
+export const GetRecommendationSchema = z.object({
+  transcriptSnippet: z.string().min(1, { message: 'Snippet transkrip diperlukan' }),
+  brief: z.string().optional(),
+  videoTitle: z.string().optional(),
+  clipRank: z.number().optional()
+});
+
+export type GetRecommendationInput = z.infer<typeof GetRecommendationSchema>;

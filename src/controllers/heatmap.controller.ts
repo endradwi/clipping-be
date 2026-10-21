@@ -38,7 +38,8 @@ export class HeatmapController {
         thumbnail: meta.thumbnail,
         heatmapPoints: meta.heatmap,
         topClips,
-        transcript: meta.transcript || []
+        transcript: meta.transcript || [],
+        brief: parse.data.brief
       };
 
       return successResponse(result);
@@ -199,7 +200,8 @@ export class HeatmapController {
         topClips,
         transcript: allSegments,
         isUploadedVideo: true,
-        directVideoUrl: r2Url
+        directVideoUrl: r2Url,
+        brief: parse.data.brief
       };
 
       return successResponse(result);

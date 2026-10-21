@@ -12,6 +12,7 @@ export const apiRoutes = new Elysia({ prefix: '/api/v1' })
 
   // Clip Rendering & Progress
   .post('/clips/render', ({ body, request }) => clipController.triggerRender({ body, request }))
+  .post('/clips/recommendation', ({ body, headers }) => clipController.getClipRecommendation({ body, headers }))
   .get('/clips/history', ({ query }) => clipController.getHistory({ query }))
   .get('/clips/:id', ({ params }) => clipController.getJob({ params }))
   .get('/clips/:id/progress', ({ params }) => clipController.streamProgress({ params }))

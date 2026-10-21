@@ -6,6 +6,13 @@ export class DbService {
   private supabase: SupabaseClient | null = null;
   private inMemoryJobs = new Map<string, ClipJobEntity>();
 
+  private withTimeout<T>(promise: PromiseLike<T>, ms: number = 1500): Promise<T> {
+    return Promise.race([
+      Promise.resolve(promise),
+      new Promise<T>((_, reject) => setTimeout(() => reject(new Error('Supabase request timeout')), ms))
+    ]);
+  }
+
   constructor() {
     const url = process.env.PUBLIC_SUPABASE_URL;
     const key = process.env.PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -23,7 +30,7 @@ export class DbService {
 
     if (this.supabase) {
       try {
-        await this.supabase.from('render_jobs').upsert({
+        await this.withTimeout(this.supabase.from('render_jobs').upsert({
           id: job.id,
           youtube_url: job.url,
           title: job.title,
@@ -37,7 +44,7 @@ export class DbService {
           error_message: job.error,
           created_at: job.createdAt,
           completed_at: job.completedAt
-        });
+        }));
       } catch (err: any) {
         logger.debug(`Supabase upsert skipped (table might not exist yet): ${err.message}`);
       }
@@ -51,11 +58,13 @@ export class DbService {
 
     if (this.supabase) {
       try {
-        const { data, error } = await this.supabase
-          .from('render_jobs')
-          .select('*')
-          .eq('id', id)
-          .single();
+        const { data, error }: any = await this.withTimeout(
+          this.supabase
+            .from('render_jobs')
+            .select('*')
+            .eq('id', id)
+            .single()
+        );
 
         if (data && !error) {
           return {
@@ -98,14 +107,16 @@ export class DbService {
 
     if (this.supabase) {
       try {
-        const { data } = await this.supabase
-          .from('render_jobs')
-          .select('*')
-          .eq('youtube_url', url)
-          .eq('status', 'completed')
-          .gte('start_time', start - 1)
-          .lte('start_time', start + 1)
-          .maybeSingle();
+        const { data }: any = await this.withTimeout(
+          this.supabase
+            .from('render_jobs')
+            .select('*')
+            .eq('youtube_url', url)
+            .eq('status', 'completed')
+            .gte('start_time', start - 1)
+            .lte('start_time', start + 1)
+            .maybeSingle()
+        );
 
         if (data && data.r2_url) {
           return {
@@ -142,11 +153,13 @@ export class DbService {
 
     if (this.supabase) {
       try {
-        const { data } = await this.supabase
-          .from('render_jobs')
-          .select('*')
-          .eq('youtube_url', url)
-          .eq('status', 'completed');
+        const { data }: any = await this.withTimeout(
+          this.supabase
+            .from('render_jobs')
+            .select('*')
+            .eq('youtube_url', url)
+            .eq('status', 'completed')
+        );
 
         if (data) {
           for (const row of data) {
